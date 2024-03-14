@@ -1,27 +1,44 @@
-
 #!/bin/bash
-export REPOSITORY="<USER/REPOSITORY>"
-export LOCATION="<DESIRED ARO LOCATION>"
-export SP_NAME="<INSERT SERVICE PRINCIPAL NAME HERE>"
-export RESOURCEGROUP="aro-pub"
 
-#Set the github repo
-gh secret list -R $REPOSITORY
+source helper_vars.sh
 
-export TENANT_ID=$(az account list --query "[?name =='Cloud Services Black Belt Subscription'].tenantId" -o tsv)
-export AZURE_SUBSCRIPTION=$(az account show --query id -o tsv)
-export AZURE_CREDENTIALS=$(cat sp.txt)
-export AAD_CLIENT_ID=$(az ad sp list --all --query "[?displayName == '$SP_NAME'].appId" -o tsv)
-export AAD_CLIENT_SECRET=$(cat sp.txt | jq -r .clientSecret)
-export AAD_OBJECT_ID=$(az ad sp show --id $AAD_CLIENT_ID --query id -o tsv)
-export ARO_RP_OB_ID=$(az ad sp list --all --query "[?appDisplayName=='Azure Red Hat OpenShift RP'].id" -o tsv)
-export PULL_SECRET=$(cat pull-secret.json | sed 's/"/\\"/g')
+# Set the github repo
+# gh api user -q .login
+# gh auth logout
+# gh auth login
+# gh api user -q .login 
 
-gh secret set AZURE_SUBSCRIPTION --body "$AZURE_SUBSCRIPTION" -R $REPOSITORY
-gh secret set AZURE_CREDENTIALS --body "$AZURE_CREDENTIALS" -R $REPOSITORY
-gh secret set AAD_CLIENT_ID --body "$AAD_CLIENT_ID" -R $REPOSITORY
-gh secret set AAD_CLIENT_SECRET --body "$AAD_CLIENT_SECRET" -R $REPOSITORY 
-gh secret set AAD_OBJECT_ID --body "$AAD_OBJECT_ID" -R $REPOSITORY
-gh secret set ARO_RP_OB_ID --body "$ARO_RP_OB_ID" -R $REPOSITORY
-gh secret set RESOURCEGROUP --body "$RESOURCEGROUP" -R $REPOSITORY
-gh secret set PULL_SECRET --body "$PULL_SECRET" -R $REPOSITORY
+#fix the pagination
+gh config set pager "less -FX"
+
+# List GH Secrets
+gh secret list -R $GH_REPOSITORY
+printf "\n"
+
+# List GH variables
+gh variable list -R $GH_REPOSITORY
+printf "\n"
+
+# Set Secrets
+gh secret set TENANT_ID --body "$TENANT_ID" -R $GH_REPOSITORY
+gh secret set AAD_ADMIN_GROUP_ID --body "$AAD_ADMIN_GROUP_ID" -R $GH_REPOSITORY
+gh secret set AAD_APP_CLIENT_ID --body "$AAD_APP_CLIENT_ID" -R $GH_REPOSITORY
+gh secret set AAD_SP_OBJECT_ID --body "$AAD_SP_OBJECT_ID" -R $GH_REPOSITORY
+gh secret set PULL_SECRET --body "$PULL_SECRET" -R $GH_REPOSITORY
+gh secret set ARO_RP_OB_ID --body "$ARO_RP_OB_ID" -R $GH_REPOSITORY
+# Only set AAD_CLIENT_SECRET if env is set - to prevent overwriting with no value
+if [ -n "$AAD_CLIENT_SECRET" ]; then
+    gh secret set AAD_CLIENT_SECRET --body "$AAD_CLIENT_SECRET" -R $GH_REPOSITORY
+else
+    printf "\n"
+    echo "WARNING: A value for AAD_CLIENT_SECRET was not set"
+    printf "\n"
+fi
+
+# Set environment vars
+gh variable set AZURE_SUBSCRIPTION --body "$AZURE_SUBSCRIPTION" -R $GH_REPOSITORY
+gh variable set RESOURCEGROUP --body "$PUB_RG" -R $GH_REPOSITORY
+gh variable set CONTAINER_BUILD_NAME --body $CONTAINER_BUILD_NAME -R $GH_REPOSITORY
+gh variable set GH_REPOSITORY --body $GH_REPOSITORY -R $GH_REPOSITORY
+gh variable set LOCATION --body $LOCATION -R $GH_REPOSITORY
+gh variable set ACR_USERNAME --body $ACR_USERNAME -R $GH_REPOSITORY

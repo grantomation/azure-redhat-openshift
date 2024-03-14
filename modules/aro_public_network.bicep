@@ -7,7 +7,7 @@ param tags object
 param controlPlaneSubnetName string
 param computeSubnetName string
 
-resource cluster_vnet 'Microsoft.Network/virtualNetworks@2020-05-01' = {
+resource cluster_vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = {
   name: vnetName
   location: location
   tags: tags

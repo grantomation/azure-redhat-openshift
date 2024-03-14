@@ -12,7 +12,7 @@ param acrToken string
 param keyVaultUri string
 param identityClientId string
 
-resource aro_config_container 'Microsoft.ContainerInstance/containerGroups@2021-10-01' = {
+resource aro_config_container 'Microsoft.ContainerInstance/containerGroups@2023-05-01' = {
   name: aciName
   location: location
   identity: {
