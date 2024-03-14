@@ -1,120 +1,223 @@
-Deploying Azure Red Hat OpenShift (ARO) is a fairly straightforward process. By following the [official documentation](https://docs.microsoft.com/en-au/azure/openshift/intro-openshift), creating the required Azure infrastructure and running the deployment command, a highly available OpenShift cluster will become available and ready to run containerised workloads in approximately 40 minutes. This repo aims to automate that process.
+# Azure Red Hat OpenShift (ARO) - Publicly Accessible Deployment
 
-# Architecture
+This repo will guide you through the process of deploying an Azure Red Hat OpenShift (ARO) cluster in Azure. The cluster will be accessible via the Internet and therefore no firewall or additional Azure network security features will be deployed, just the ARO cluster and the cloud resources used to configure it.
 
-This is a public deployment and will deploy a range of supporting Azure resources into a resource group in order to configure the ARO cluster.
+If you are looking for an Azure Landing Zone Implementation of ARO then please see the following repo [Azure Red Hat OpenShift (ARO) Landing Zone Automated Deployment](https://github.com/grantomation/azure-red-hat-openshift-landing-zone)
 
-### Virtual Network
+![Github actions workflow](./graphics/github_actions.png)
 
-The vnet contains a subnet for the ARO control plane nodes and the ARO compute nodes. 
+ARO is a first party service on Azure which means that it's part of the Azure API, as such I have purposely created this repo using tooling that is familiar to Azure customers to prove that ARO can be integrated into Azure environments the same way that they can deploy their other Azure resources. It is designed to take customers from nothing to a publicly accessible ARO cluster as the destination for containerised workloads.
 
-### Keyvault and Managed Identity
+# High Level Architecture
+Let's start by looking at the High level architecture. Aligning with Azure's landing zone implementation the deployment creates three resource groups;
 
-A keyvault is created which will store the secrets produced by the ARO cluster. The managed identity is created to be used by the Azure container instance to access the secrets in the keyvault. The container instance will configure the ARO cluster using yaml and OC command.
+* A Resource group
+  * Contains Azure Red Hat OpenShift (ARO).
 
-### Azure container Registry
+# Resource Details
+[Click Here](./docs/resource_details.md) for a description of the Azure Red Hat OpenShift Landing Zone Resources.
 
-A container based on the Red Hat universal base image (UBI) is built which can be used to configure the private ARO cluster. The Azure container registry will store the built image which is pulled when the container instance is deployed in the pipeline.
+# Workflow Job Details
+[Click Here](./docs/workflow_details.md) for a description of the Azure Red Hat OpenShift Landing Zone deployment Github actions workflow jobs.
 
-### Secrets in Keyvault
+# General Deployment Workflow
 
-The Azure keyvault will store the kubeadmin password and api endpoint of the private ARO cluster. This keyvault will then be used by a managed identity attached to the container instances to access and configure the cluster.
+* Copy this repo to a private repo of your own
+* Create a Github personal access token
+* Create an Azure Application Registration/Service principal 
+* Create a resource groups and grant the Azure Service Principal `Contributor` and `User Access Administration` permissions scoped to these resource groups.
+* Create Github repository secrets and variables (use the helper script to make it easy)
+* [Run the Github actions workflow](./docs/workflow_details.md)
+* Log into Azure Red Hat OpenShift using your Azure EntraID Directory account
 
-### Container Build and Instance
+# Pre-requisites
 
-As part of the deployment process, a pipeline job will build a contianer image which contains tools to help configure the ARO private cluster. This container will be pushed to the Azure container registry and then pulled by the Azure container instance.
+## Required Software
+* az command line
+* jq
+* curl
+* gh command line
 
+## Make a copy of this repo on Github
+Make a copy of this repo to your Github account, ensure that it is a private repo, this wil prevent accidental leaking of secrets and avoid anyone from the public running the Github actions workflow.
 
-# Github actions deployment 
+> **Warning** 
+> Please be careful about how you store secrets. It is advised to use a private repo to ensure that there is a less chance of private data exposure.
 
-Using the github actions workflow the bicep modules can be deployed from a github repo. The github actions deployment will be scoped to the resource group level. This means that there will initally be a additional steps to create a service principal, resource groups and assign the appropriate permissions. These steps will only have to be run once for as long as the resource groups and service principal remain within the Azure environment. The github actions workflow will use public runners unless otherwise configured.
+## Create a Github Personal Access Token
+The Github Personal access token is injected as a secure environment variable into the Github runner container which is used in the workflow so that it can register itself to your Github repository as a runner and poll for jobs.
 
-![Github actions pipeline](./images/github_actions.png)
+* Create a personal access token
+  * Github > User Settings > Developer Settings > Personal access tokens (or https://Github.com/settings/tokens)
+  * Set an expiry and add a note 'used for ARO deployment'
+  * Grant permissions for "repo", "workflow", "admin:org", "admin:public_key"
+  * Save the token
+  * Run the following command `gh auth login` and paste in the token
+  * Github.com, SSH, \<Select SSH Key\>, Paste an authentication token
+  * Insert the PAT as a Github secret as per the "secrets" table below "PAT_Github"
 
-> :warning: Please be careful about how you store secrets. It is advised to use a private repo to ensure that there is a less chance of private data exposure.
+## Create EntraID Security Group
+Create an EntraID Security Group which will contain the users that will be administrators for Azure Red Hat OpenShift (ARO). You will need to place the 
 
-## Github actions prerequisites
+```console
+export SG_NAME="<insert name of security group for openshift administrators>"
 
-### Create resource groups
+az ad group create --display-name "$SG_NAME" --mail-nickname "mysecuritygroup" --security-enabled true
 
-> :warning: Try not to delete the resource groups once created or you will need to run the permissions commands again.
-
-As a user run the following command to create resource groups that will be used for the github actions deployment.
-
-```
-$ export SUBSCRIPTION=$(az account show --query id -o tsv)
-$ export LOCATION=<insert location here>
-$ export ARO_RG="<insert hub resource group name here>"
-
-$ az group create -n $ARO_RG -l $LOCATION
-
-```
-Alternatively I have created a shell script called `pub_rg_create.sh` which will run all of these commands for you. You will need to change the variables at the top of the file to suit your environment.
-
-### Create a service principal
-
-Create a service principal that will run the github actions bicep modules. This SP will also be granted "User access admin" permission on the spoke resource group, this is to ensure that the ARO deployment can assign the resource provider "Red Hat OpenShift RP" permissions to the spoke resource group.
-
-```
-$ export SP_NAME="<insert name for the service principal here>"
-
-$ az ad sp create-for-rbac -n $SP_NAME --role contributor --sdk-auth --scopes "/subscriptions/$SUBSCRIPTION/resourceGroups/$ARO_RG" > sp.txt
-
-$ export AAD_CLIENT_ID=$(az ad sp list --all --query "[?displayName == '$SP_NAME'].appId" -o tsv)
-
-```
-
-### Scope the service principal's permissions to the resource group
-
-```
-$ export SCOPE_RG=$(az group show -n $ARO_RG --query id -o tsv)
-
-
-$ az role assignment create --assignee $AAD_CLIENT_ID --role contributor --scope $SCOPE_RG
-$ az role assignment create --assignee $AAD_CLIENT_ID --role "User Access Administrator" --scope $SCOPE_RG
-
+az ad group list --filter "displayName eq 'SG_NAME'" --query "[].objectId" --output tsv
 ```
 
-### Modify parameter
+## Create Red Hat pull secret 
+For an Azure Red Hat OpenShift (ARO) cluster deployment, a Red Hat pull secret is still needed to download and use Red Hat images for Operators found in the Operator Hub. A pull secret is essentially an authentication token that provides access to Red Hat's registry, which contains container images and other software packages. If you do not have a pull-secret from Red Hat already then please browse to [cloud.redhat.com](https://cloud.redhat.com) to create one. The Red Hat pull secret will be used as a Github repository secret.
 
-1. Modify the parameters found in `./action_params/*.json` to suit your environment.
+Place the Red Hat pull secret in a file called `pull-secret.json` at the root of this repo to ensure that the helper scripts can read it and write it to Github repository secrets for use in the Github actions workflow.
 
-1. Modify the parameters found in `./github/workflows/action_deploy_aro_public.yml` and `./github/workflows/action_public_rg_cleanup.yml` to suit your environment.
-    * LOCATION (location for resources)
+## Create an Azure App Registration/Service Principal
 
-### Create github encrypted secrets to be used by github actions
+For this repo an Azure app registration/service principal is required. It has a few uses;
 
-The following secrets will need to be created in the github repository as "Action Secrets". Go to your repo > select settings > select secrets > select Actions > select "New repository secret".
+1. *Deploying ARO* - An app registration/service principal is needed to provide secure access to Azure resources that are required to deploy and manage an ARO cluster. A app registration/service principal is essentially an identity for your ARO cluster that allows it to access and manage Azure resources such as virtual networks, storage accounts, and other resources required by the cluster. By creating an app registration/service principal, you can grant your ARO cluster the necessary permissions to access and manage Azure resources without giving it full access to your entire Azure subscription.
 
-Alternatively, I have created a shell script called `gh_secrets_create.sh` which uses the github command line to create the secrets for you. Before running this file you would have needed to do the following;
+2. *Deploy Resources to Azure using Github actions* - The Azure service principal is used by Github Actions to authenticate and authorize the deployment of your code to Azure resources. This allows Github Actions to perform actions such as creating or updating resources, deploying code to virtual machines, and more. The permissions that are granted to the service principal are `Contributor` and `User access admin` scoped to the three resource groups that are created.
+- `Contributor` permits resource creation
+- `User access admin` permits adding the Azure Red Hat OpenShift Resource Provider the appropriate permissions during the Azure installation.
 
-| Secret Name | Command to run to get correct value for secret | 
+3. *OIDC Login for GitHub Actions* With OpenID Connect (OIDC), you can configure your workflow to request a short-lived access token directly from the cloud provider. Your cloud provider also needs to support OIDC on their end, and you must configure a trust relationship that controls which workflows are able to request the access tokens. Providers that currently support OIDC include Amazon Web Services, Azure, Google Cloud Platform, and HashiCorp Vault, among others.
+
+4. *Credentials for ARO to use Entra as identity provider* - During the configuration of the OpenShift identity provider the Azure service principal is used.
+
+Set the name for the EntraID App Registration/Service Principal
+
+```console
+export DISPLAYNAME="<Desired Entra App Registration/Service Principal name>"
+```
+Now create the app registration and the service principal. We will also start to configure
+```
+az ad app create --display-name=$DISPLAYNAME --sign-in-audience AzureADMyOrg --optional-claims "{\"idToken\":[{\"name\":\"preferred_username\",\"source\": null,\"essential\": false,\"additionalProperties\":[]},{\"name\":\"email\",\"source\": null,\"essential\": false,\"additionalProperties\": []}]}"
+
+export AAD_APP_CLIENT_ID=$(az ad app list --filter "displayname eq '$DISPLAYNAME'" --query '[].appId' -o tsv)
+echo $AAD_APP_CLIENT_ID
+
+az ad sp create --id $AAD_APP_CLIENT_ID
+
+```
+
+- Now create a password for the App Registration / Service Principal
+```
+export AAD_CLIENT_SECRET=$(az ad app credential reset --id $AAD_APP_CLIENT_ID --query password -o tsv)
+```
+
+- Now run gh_secrets_create.sh to populate github values (YOU WILL NEED TO READ/CREATE GITHUB PERSONAL ACCESS TOKEN FIRST)
+```
+gh api user -q .login
+gh auth logout
+gh auth login
+gh api user -q .login 
+```
+Select the following options
+- Github.com
+- HTTPS
+- Paste your authentication token
+
+You should see output like the following
+```
+- gh config set -h github.com git_protocol https
+✓ Configured git protocol
+✓ Logged in as grantomation
+```
+
+## Set Helper Script Variables
+Set the following variables in the file `helper_vars.sh` to ensure that the helper scripts can run sucessfully.
+
+| Helper Var Name | Description |
 | --- | --- | 
-| AZURE_SUBSCRIPTION | ` az account show --query id -o tsv ` | 
-| AZURE_CREDENTIALS | copy the contents of sp.txt here. Json format will work | 
-| AAD_CLIENT_ID | `az ad sp list --all --query "[?displayName == '$SP_NAME'].appId" -o tsv` |
-| AAD_CLIENT_SECRET | `cat sp.txt \| jq -r .clientSecret ` | 
-| AAD_OBJECT_ID | `az ad sp show --id $AAD_CLIENT_ID --query id -o tsv`  |
-| ARO_RP_OB_ID | `az ad sp list --all --query "[?appDisplayName=='Azure Red Hat OpenShift RP'].id" -o tsv` |
-| RESOURCEGROUP | \<insert the resource group name\> | 
-| PULL_SECRET | Format the Red Hat Pull Secret with the following command `cat pull-secret.json \| sed 's/"/\\"/g'` then place the output into the secret
+| DISPLAYNAME | The name for the App registration/service principal that you created above. | 
+| GH_REPO | Your copy of this github repository (private) where you are running this code from. |
+| GH_ORGANISATION | Your github username (or organisation). |
+| GH_BRANCH | Set the branch where you will run the github actions from (default `master`)  | 
+| PAT_GITHUB | The Personal Access Token for Github that you created above |
+| LOCATION | Azure Region where cloud resources will be deployed | 
+| PUB_RG | The name of the resource group which will hold Azure Red Hat OpenShift (ARO) |
+| AAD_ADMIN_GROUP_ID | The ID of the Azure EntraId Security Group. Get ID by running the following command `az ad group show -g <AAD GROUP NAME> --query id -o tsv` | 
+| CONTAINER_BUILD_NAME | The name and tag for the Github runner container that is build default `aro-github-runner:1` | 
 
-> :Note: The pull secret should have the following syntax prior to adding it to the github secret `{\"auths\":{\"cloud.openshift.com\":{\"auth\":\"XXXXXXXXXX\" ...`
+All other variables in this file will be determined via lookup commands using `az` cli
 
-## Github actions Deployment
+## Set Parameters and Variables for your environment
 
-To run the github actions to deploy the environment select the following;
+1. Modify the parameters found in `./action_params/*.json` to suit your Azure environment.
 
-![Run ARO github action](./images/run_aro_action.png)
+The following parameter names require unique names - so please be mindful of this;
 
-## Github actions Cleanup
+| Cloud Resource | Parameter Name | Location in Code |
+| --- | --- | --- |
+| Storage Account | `storageAccountName` | `action_params/storage.parameters.json` |
+| Azure Container Registry | `acrName` | `action_params/acr.parameters.json` |
+| Azure Keyvault | `keyVaultName` | `action_params/keyvault.parameters.json` |
+| Azure Red Hat OpenShift (ARO) Domain | `domain` | `action_params/aro.parameters.json` |
 
-To run the github actions to deploy the environment select the following;
+## Register Azure Providers
+The following Azure services need to be registered prior to deployment;
 
-![Cleanup ARO resources](./images/cleanup_action.png)
+```console
+az provider register -n Microsoft.RedHatOpenShift
+az provider register -n Microsoft.Storage
+az provider register -n Microsoft.KeyVault
+az provider register -n Microsoft.Compute
+az provider register -n Microsoft.ContainerRegistry
+az provider register -n Microsoft.Cdn
+az provider register -n Microsoft.ContainerInstance
+az provider register -n Microsoft.OperationalInsights
+az provider register -n Microsoft.Insights
 
-## Shell script cleanup
+```
 
-Alternatively I have created a shell script called `pub_rg_delete.sh` which will run resource group delete commands for you. You will need to change the variables at the top of the file to suit your environment.
+## Set the appropriate quota for your environment
+
+By default ARO uses a minimum 40 cores and this will need to be accounted for in the Azure Quota. 
+
+Default virtual machine types for ARO are "Standard D4s v3" machines.
+
+# Run the helper scripts
+
+### <a id="Github-secrets"></a>Create the Github Repository Secrets and Variables
+
+> :warning: Remember to log in to the `gh` cli tool prior to the `gh_secrets_create.sh` helper script.
+
+Github repository secrets are encrypted environment variables that you can store in a repository on Github. These secrets are used to store sensitive information that is required by your Github Actions workflows, such as API keys, access tokens, and other secrets. Github Actions repository variables are environment variables that you can define for a specific repository in Github. These variables can be used in Github Actions workflows to store values that are specific to that repository.
+
+Ensure that you are logged in to the Azure CLI with a user that has appropriate permissions and execute the following commands;
+
+```console
+chmod +x helper_vars.sh
+chmod +x gh_secrets_create.sh
+
+./gh_secrets_create.sh
+
+```
+
+### Run Resource Group creation
+Prior to running the workflow a user with the appropriate permissions must create the initial resource groups with correct permissions for the App registration/service principal.
+
+Run `./pub_rg_create.sh` to perform these actions for you.
+
+```
+chmod +x pub_rg_create.sh
+./pub_rg_create.sh
+```
+
+# Run the Github actions Azure Red Hat OpenShift Landing Zone workflow
+
+To run the Github actions to deploy the environment select the following;
+
+![Run ARO Github action](./graphics/run_aro_action.png)
+
+# Github actions workflow Resource Cleanup
+
+To complete a full cleanup of Azure resources execute the delete helper script `./lz_rg_delete.sh` which will run resource group delete commands for you. You will need to change the variables at the top of the file to suit your environment.
+
+An azure keyvault stays in a deleted state for approximately 90 days after deletion. This script will also purge the keyvault to ensure that there are no failures on the next ARO deployment.
+
+These values can be set in the `action_params/aro.parameters.json` file in the `controlPlaneVmSize` and `computeVmSize` parameters.
 
 # **Pull Requests are welcome!**

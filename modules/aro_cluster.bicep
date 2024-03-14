@@ -8,9 +8,6 @@ param aadClientId string
 param aadClientSecret string
 
 @secure()
-param aadObjectId string
-
-@secure()
 param rpObjectId string
 
 param location string
@@ -30,26 +27,14 @@ param controlPlaneSubnetName string
 param computeSubnetName string
 param fipsValidatedModules string
 param encryptionAtHost string
-param addSpRoleAssignment string
+param openshiftVersion string
 
 var contribRole = 'b24988ac-6180-42a0-ab88-20f7382dd24c'
 param resourceGroupId string = '/subscriptions/${subscription().subscriptionId}/resourceGroups/${domain}-${clusterName}-${location}'
 
-resource clusterVnet 'Microsoft.Network/virtualNetworks@2021-08-01' existing = { name: vnetName }
+resource clusterVnet 'Microsoft.Network/virtualNetworks@2023-09-01' existing = { name: vnetName }
 
-resource role_for_aadObjectId 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = if (addSpRoleAssignment == 'yes') {
-  name: guid(resourceGroup().id, aadObjectId, deployment().name)
-  properties: {
-    principalId: aadObjectId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', contribRole)
-  }
-  dependsOn: [
-    clusterVnet
-  ]
-}
-
-resource role_for_rpObjectId 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
+resource role_for_rpObjectId 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(resourceGroup().id, rpObjectId)
   properties: {
     principalId: rpObjectId
@@ -61,7 +46,7 @@ resource role_for_rpObjectId 'Microsoft.Authorization/roleAssignments@2020-10-01
   ]
 }
 
-resource aro 'Microsoft.RedHatOpenShift/openShiftClusters@2022-04-01' = {
+resource aro 'Microsoft.RedHatOpenShift/openShiftClusters@2023-09-04' = {
   name: clusterName
   location: location
   tags: tags
@@ -71,6 +56,7 @@ resource aro 'Microsoft.RedHatOpenShift/openShiftClusters@2022-04-01' = {
       resourceGroupId: resourceGroupId
       pullSecret: pullSecret
       fipsValidatedModules: fipsValidatedModules
+      version: openshiftVersion
     }
     networkProfile: {
       podCidr: podCidr
@@ -107,7 +93,6 @@ resource aro 'Microsoft.RedHatOpenShift/openShiftClusters@2022-04-01' = {
   }
   dependsOn: [
     clusterVnet
-    role_for_aadObjectId
     role_for_rpObjectId
   ]
 }

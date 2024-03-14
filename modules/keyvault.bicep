@@ -5,7 +5,7 @@ param keyVaultDomain string
 param spObjectId string
 var keyVaultUri = 'https://${keyVaultName}.${keyVaultDomain}/'
 
-resource keyvault_resource 'Microsoft.KeyVault/vaults@2022-07-01' = {
+resource keyvault_resource 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: keyVaultName
   location: location
   properties: {
