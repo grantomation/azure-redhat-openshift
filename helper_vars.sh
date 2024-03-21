@@ -13,6 +13,7 @@ export GH_REPOSITORY="${GH_ORGANISATION}/${GH_REPO}"
 # SET AZURE VARIABLES
 export LOCATION="<insert azure region where you would like to deploy resources>"
 export PUB_RG="<insert name of resource group containing ARO>"
+export IDP_NAME="<the desired display name of the OpenShift oauth provider - e.g. EntraID or AAD>"
 export AAD_ADMIN_GROUP_ID="<insert the id of the AAD group containing openshift administrators - az ad group show -g <MY AAD GROUP NAME> --query id -o tsv>"
 
 # SET THE NAME FOR THE AZURE CONTAINER INSTANCE RUNNER
