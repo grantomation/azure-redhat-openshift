@@ -38,8 +38,11 @@ Let's start by looking at the High level architecture. Aligning with Azure's lan
 * curl
 * gh command line
 
-## Make a copy of this repo on Github
-Make a copy of this repo to your Github account, ensure that it is a private repo, this wil prevent accidental leaking of secrets and avoid anyone from the public running the Github actions workflow.
+## Make a copy of this repo on Github using the Template feature
+
+![GitHub Template](./graphics/template.png)
+
+Make a copy of this repo to your Github account using the template feature, ensure that it is a private repo, this wil prevent accidental leaking of secrets and avoid anyone from the public running the Github actions workflow.
 
 > **Warning** 
 > Please be careful about how you store secrets. It is advised to use a private repo to ensure that there is a less chance of private data exposure.
