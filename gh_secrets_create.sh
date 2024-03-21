@@ -25,6 +25,7 @@ gh secret set AAD_ADMIN_GROUP_ID --body "$AAD_ADMIN_GROUP_ID" -R $GH_REPOSITORY
 gh secret set AAD_APP_CLIENT_ID --body "$AAD_APP_CLIENT_ID" -R $GH_REPOSITORY
 gh secret set AAD_SP_OBJECT_ID --body "$AAD_SP_OBJECT_ID" -R $GH_REPOSITORY
 gh secret set PULL_SECRET --body "$PULL_SECRET" -R $GH_REPOSITORY
+gh secret set PAT_GITHUB --body "$PAT_GITHUB" -R $GH_REPOSITORY
 gh secret set ARO_RP_OB_ID --body "$ARO_RP_OB_ID" -R $GH_REPOSITORY
 # Only set AAD_CLIENT_SECRET if env is set - to prevent overwriting with no value
 if [ -n "$AAD_CLIENT_SECRET" ]; then
@@ -42,3 +43,4 @@ gh variable set CONTAINER_BUILD_NAME --body $CONTAINER_BUILD_NAME -R $GH_REPOSIT
 gh variable set GH_REPOSITORY --body $GH_REPOSITORY -R $GH_REPOSITORY
 gh variable set LOCATION --body $LOCATION -R $GH_REPOSITORY
 gh variable set ACR_USERNAME --body $ACR_USERNAME -R $GH_REPOSITORY
+gh variable set IDP_NAME --body $IDP_NAME -R $GH_REPOSITORY

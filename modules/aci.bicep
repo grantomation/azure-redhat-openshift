@@ -1,16 +1,19 @@
 param location string
+param loginServer string
+param containerBuildName string
+param identityName string
+param ghRepository string
+param ghPersonalToken string
+param keyVaultUri string
 param aciName string
 param aciSku string
 param aciGroupName string
-param loginServer string
-param acrUserName string
-param containerBuildName string
+param ghRunnerName string
 var aciImage = '${loginServer}/${containerBuildName}'
-param identityId string
-@secure()
-param acrToken string
-param keyVaultUri string
-param identityClientId string
+
+resource managed_identity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
+  name: identityName
+}
 
 resource aro_config_container 'Microsoft.ContainerInstance/containerGroups@2023-05-01' = {
   name: aciName
@@ -18,7 +21,7 @@ resource aro_config_container 'Microsoft.ContainerInstance/containerGroups@2023-
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
-      '${identityId}': {
+      '${managed_identity.id}': {
       }
     }
   }
@@ -29,9 +32,6 @@ resource aro_config_container 'Microsoft.ContainerInstance/containerGroups@2023-
         name: aciGroupName
         properties: {
           image: aciImage
-          command: [
-            '/data/openshift_config.sh'
-          ]
           ports: [
             {
               protocol: 'TCP'
@@ -40,8 +40,16 @@ resource aro_config_container 'Microsoft.ContainerInstance/containerGroups@2023-
           ]
           environmentVariables: [
             {
-              name: 'IDENTITY_ID'
-              secureValue: identityClientId
+                name: 'REPOSITORY'
+                value: ghRepository
+            }
+            {
+                name: 'RUNNER_NAME'
+                value: ghRunnerName
+            }
+            {
+                name: 'PAT_GITHUB'
+                secureValue: ghPersonalToken
             }
             {
               name: 'KV_URI'
@@ -61,8 +69,7 @@ resource aro_config_container 'Microsoft.ContainerInstance/containerGroups@2023-
     imageRegistryCredentials: [
       {
         server: loginServer
-        username: acrUserName
-        password: acrToken
+        identity: managed_identity.id
       }
     ]
     restartPolicy: 'OnFailure'
@@ -78,3 +85,5 @@ resource aro_config_container 'Microsoft.ContainerInstance/containerGroups@2023-
     osType: 'Linux'
   }
 }
+
+output containerName string = aro_config_container.name

@@ -41,8 +41,8 @@ This job writes secrets created during the Github actions workflow to the Azure 
 
 Additionally the yaml files used to configure OpenShift are packaged up and uploaded to the storage account on the private network, again, to be availabe to jobs in the workflow which configure resources on the private network. The secrets are later retrieved using the managed identity attached to the storage account.
 
-## aro_day_1_config
+## aro_day_2_config
 
-Day 1 configuration of the OpenShift cluster (Identity providers, storage classes, or OpenShift operators) is performed on this step using the github runner. The runner uses a managed identity to get the ARO kubeadmin password and api endpoint from Azure keyvault, downloads the files from the secure storage, and then runs commands against the ARO cluster with kubernetes cluster admin privileges.
+Day 2 configuration of the OpenShift cluster (Identity providers, storage classes, or OpenShift operators) is performed on this step using the github runner. The runner uses a managed identity to get the ARO kubeadmin password and api endpoint from Azure keyvault, downloads the files from the secure storage, and then runs commands against the ARO cluster with kubernetes cluster admin privileges.
 
 Whilst this script works for initial configuration of an ARO private cluster, for subsequent configuration it is recommended to use a kubernetes configuration tool such as Red Hat Advanced Cluster Management (RHACM) or a different Github actions workflow.
